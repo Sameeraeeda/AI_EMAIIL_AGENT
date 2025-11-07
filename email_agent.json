@@ -1,0 +1,156 @@
+{
+  "name": "AI Email Agent - Daily Digest",
+  "nodes": [
+    {
+      "id": "ScheduleTrigger",
+      "name": "Daily 9AM Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 2,
+      "position": [200, 200],
+      "parameters": {
+        "rule": {
+          "mode": "time",
+          "timezone": "Asia/Kolkata",
+          "hour": 9,
+          "minute": 0
+        }
+      }
+    },
+    {
+      "id": "GmailFetcher",
+      "name": "Fetch Gmail (Last 24h)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [400, 200],
+      "parameters": {
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages",
+        "method": "GET",
+        "authentication": "predefinedCredentialType",
+        "queryParameters": {
+          "q": "newer_than:1d -in:spam -in:trash",
+          "maxResults": 100
+        },
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": "Gmail API OAuth"
+      }
+    },
+    {
+      "id": "EmailExtractor",
+      "name": "Extract Email Data",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [600, 200],
+      "parameters": {
+        "functionCode": "return [{\n  emails: [\n    {\n      id: '18c9f1a3e2a4b9d7',\n      from: 'sender@example.com',\n      subject: 'Meeting Invite',\n      snippet: 'Can we reschedule our 1:1?',\n      date: '2025-06-26T09:21:00Z',\n      labels: ['INBOX']\n    },\n    {\n      id: '18c9f1b4d0a1c553',\n      from: 'alerts@bank.com',\n      subject: 'Debit Alert ₹2000',\n      snippet: '₹2000 debited from your HDFC account.',\n      date: '2025-06-26T06:04:12Z',\n      labels: ['INBOX', 'IMPORTANT']\n    }\n  ]\n}];"
+      }
+    },
+    {
+      "id": "GeminiSummarizer",
+      "name": "Gemini AI Summarize + Categorize",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [800, 200],
+      "parameters": {
+        "url": "https://api.google.com/gemini/v2/summarize",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "body": {
+          "model": "gemini-2.0-flash",
+          "input": {
+            "instruction": "Summarize and categorize emails into Work, Finance, Personal, Promotions. Assign priority and suggest actions.",
+            "data": "={{$json[\"emails\"]}}"
+          }
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": "Gemini API Key"
+      }
+    },
+    {
+      "id": "Formatter",
+      "name": "Format Digest Text",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 2,
+      "position": [1000, 200],
+      "parameters": {
+        "functionCode": "const data = {\n  generated_at: '2025-06-26T09:00:05Z',\n  summary: 'Two key items today: client scheduling and bank debit alert.',\n  sections: {\n    Important: [\n      {\n        from: 'alerts@bank.com',\n        subject: 'Debit Alert ₹2000',\n        brief: '₹2000 debited from HDFC.',\n        priority: 'High',\n        action: 'Verify transaction in banking app.'\n      }\n    ],\n    Work: [\n      {\n        from: 'sender@example.com',\n        subject: 'Meeting Invite',\n        brief: 'Reschedule 1:1 requested.',\n        priority: 'Medium',\n        action: 'Propose new time for tomorrow.'\n      }\n    ]\n  }\n};\n\nlet text = '📧 Daily Email Digest\\n\\n';\ntext += '🔔 Important\\n';\ndata.sections.Important.forEach(e => {\n  text += `• ${e.subject} — ${e.brief} [${e.priority}]\\n  → Action: ${e.action}\\n\\n`;\n});\ntext += '💼 Work\\n';\ndata.sections.Work.forEach(e => {\n  text += `• ${e.subject} — ${e.brief} [${e.priority}]\\n  → Action: ${e.action}\\n\\n`;\n});\n\nreturn [{ text, length: text.length, truncated: text.length > 3900 }];"
+      }
+    },
+    {
+      "id": "TelegramSender",
+      "name": "Send to Telegram",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1200, 120],
+      "parameters": {
+        "url": "https://api.telegram.org/botYOUR_BOT_TOKEN/sendMessage",
+        "method": "POST",
+        "jsonParameters": true,
+        "body": {
+          "chat_id": "123456789",
+          "text": "={{$json[\"text\"]}}",
+          "disable_web_page_preview": true
+        }
+      }
+    },
+    {
+      "id": "WhatsAppSender",
+      "name": "Send to WhatsApp",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 2,
+      "position": [1200, 280],
+      "parameters": {
+        "url": "https://api.twilio.com/2010-04-01/Accounts/YOUR_TWILIO_SID/Messages.json",
+        "method": "POST",
+        "authentication": "predefinedCredentialType",
+        "jsonParameters": true,
+        "body": {
+          "To": "whatsapp:+911234567890",
+          "From": "whatsapp:+14155238886",
+          "Body": "={{$json[\"text\"]}}"
+        }
+      },
+      "credentials": {
+        "httpBasicAuth": "Twilio WhatsApp API"
+      }
+    }
+  ],
+  "connections": {
+    "ScheduleTrigger": {
+      "main": [
+        [{ "node": "GmailFetcher", "type": "main", "index": 0 }]
+      ]
+    },
+    "GmailFetcher": {
+      "main": [
+        [{ "node": "EmailExtractor", "type": "main", "index": 0 }]
+      ]
+    },
+    "EmailExtractor": {
+      "main": [
+        [{ "node": "GeminiSummarizer", "type": "main", "index": 0 }]
+      ]
+    },
+    "GeminiSummarizer": {
+      "main": [
+        [{ "node": "Formatter", "type": "main", "index": 0 }]
+      ]
+    },
+    "Formatter": {
+      "main": [
+        [
+          { "node": "TelegramSender", "type": "main", "index": 0 },
+          { "node": "WhatsAppSender", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": false
+  }
+}
