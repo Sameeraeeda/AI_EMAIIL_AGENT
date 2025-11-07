@@ -4,6 +4,7 @@
 
 This project automates email management using AI + automation + APIs.
 Every morning at 9 AM, an AI Email Agent fetches your Gmail inbox, summarizes key emails, categorizes them, and delivers a clean daily digest directly to Telegram and WhatsApp — so you never need to check your inbox manually.
+<img width="1100" height="550" alt="image" src="https://github.com/user-attachments/assets/3babec75-7784-4300-9b33-d8d3ce97bccf" />
 
 ⚙️ Workflow Summary
 Step	Component	Description
